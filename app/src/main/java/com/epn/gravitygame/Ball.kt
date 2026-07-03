@@ -20,12 +20,12 @@ class Ball(
 
     fun radius(): Float = radius
 
-    fun update(sensorX: Float, sensorY: Float, width: Int, height: Int) {
+    fun update(sensorX: Float, sensorY: Float, width: Int, height: Int, topBoundary: Float, bottomBoundary: Float) {
         position.x += sensorX * SPEED
         position.y += sensorY * SPEED
 
         position.x = max(radius, min(width - radius, position.x))
-        position.y = max(radius, min(height - radius, position.y))
+        position.y = max(topBoundary + radius, min(bottomBoundary - radius, position.y))
     }
 
     fun draw(canvas: Canvas) {

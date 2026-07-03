@@ -21,11 +21,11 @@ class Target(
 
     fun radius(): Float = radius
 
-    fun relocate(width: Int, height: Int) {
+    fun relocate(width: Int, height: Int, topBoundary: Float, bottomBoundary: Float) {
         if (width <= 0 || height <= 0) return
         val margin = 90
         position.x = Random.nextInt(margin, width - margin).toFloat()
-        position.y = Random.nextInt(margin + 120, height - margin).toFloat()
+        position.y = Random.nextInt((topBoundary + 50f).toInt(), (bottomBoundary - 50f).toInt()).toFloat()
     }
 
     fun draw(canvas: Canvas) {

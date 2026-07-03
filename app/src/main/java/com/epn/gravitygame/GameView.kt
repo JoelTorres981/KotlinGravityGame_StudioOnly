@@ -33,6 +33,15 @@ class GameView(context: Context) : View(context) {
         highScore = sharedPrefs.getInt("high_score", 0)
     }
 
+    private val instructionsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(71, 85, 105)
+        textSize = 30f
+        isFakeBoldText = true
+    }
+
+    private fun getTopBoundary(): Float = 200f
+    private fun getBottomBoundary(): Float = height - 200f
+
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -70,7 +79,70 @@ class GameView(context: Context) : View(context) {
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        adjustPaints()
         resetGame()
+    }
+
+    private fun adjustPaints() {
+        if (width == 0) return
+        val scale = width / 1080f
+        titlePaint.textSize = 48f * scale
+        textPaint.textSize = 32f * scale
+        smallPaint.textSize = 24f * scale
+        instructionsPaint.textSize = kotlin.math.max(26f, kotlin.math.min(34f, 32f * scale))
+    }
+
+    private fun getSafeSpawnPosition(): Vector2 {
+        val defaultSpawn = Vector2(width / 2f, height / 2f)
+        if (obstacles.isEmpty()) return defaultSpawn
+
+        val top = getTopBoundary()
+        val playH = getBottomBoundary() - top
+        val candidates = listOf(
+            Vector2(width / 2f, top + playH * 0.5f),
+            Vector2(width * 0.25f, top + playH * 0.15f),
+            Vector2(width * 0.75f, top + playH * 0.15f),
+            Vector2(width * 0.25f, top + playH * 0.5f),
+            Vector2(width * 0.75f, top + playH * 0.5f),
+            Vector2(width * 0.2f, top + playH * 0.8f),
+            Vector2(width * 0.8f, top + playH * 0.8f)
+        )
+
+        var bestCandidate = defaultSpawn
+        var maxDistance = -1f
+
+        val ballRadius = ball.radius()
+        val safeMargin = ballRadius + 60f
+
+        for (candidate in candidates) {
+            var minDistanceToAnyObstacle = Float.MAX_VALUE
+            var collides = false
+
+            for (obstacle in obstacles) {
+                val closestX = kotlin.math.max(obstacle.rect.left, kotlin.math.min(candidate.x, obstacle.rect.right))
+                val closestY = kotlin.math.max(obstacle.rect.top, kotlin.math.min(candidate.y, obstacle.rect.bottom))
+                
+                val dx = candidate.x - closestX
+                val dy = candidate.y - closestY
+                val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+
+                if (dist < safeMargin) {
+                    collides = true
+                }
+                if (dist < minDistanceToAnyObstacle) {
+                    minDistanceToAnyObstacle = dist
+                }
+            }
+
+            if (!collides) {
+                if (minDistanceToAnyObstacle > maxDistance) {
+                    maxDistance = minDistanceToAnyObstacle
+                    bestCandidate = candidate
+                }
+            }
+        }
+
+        return bestCandidate
     }
 
     private fun resetGame() {
@@ -78,31 +150,37 @@ class GameView(context: Context) : View(context) {
         lives = 3
         gameOver = false
         started = false
-        ball.position.set(width / 2f, height / 2f)
-        target.relocate(width, height)
         createObstacles()
+        val spawnPos = getSafeSpawnPosition()
+        ball.position.set(spawnPos.x, spawnPos.y)
+        target.relocate(width, height, getTopBoundary(), getBottomBoundary())
         invalidate()
     }
 
     private fun createObstacles() {
         obstacles.clear()
         if (width == 0 || height == 0) return
-        obstacles.add(Obstacle(RectF(width * 0.18f, height * 0.34f, width * 0.48f, height * 0.39f)))
-        obstacles.add(Obstacle(RectF(width * 0.55f, height * 0.55f, width * 0.86f, height * 0.60f)))
-        obstacles.add(Obstacle(RectF(width * 0.25f, height * 0.73f, width * 0.62f, height * 0.78f)))
-        // Nuevos obstáculos para el nivel intermedio
-        obstacles.add(Obstacle(RectF(width * 0.10f, height * 0.20f, width * 0.40f, height * 0.24f)))
-        obstacles.add(Obstacle(RectF(width * 0.60f, height * 0.85f, width * 0.90f, height * 0.89f)))
+        val top = getTopBoundary()
+        val playH = getBottomBoundary() - top
+        
+        obstacles.add(Obstacle(RectF(width * 0.18f, top + playH * 0.22f, width * 0.48f, top + playH * 0.28f)))
+        obstacles.add(Obstacle(RectF(width * 0.55f, top + playH * 0.45f, width * 0.86f, top + playH * 0.51f)))
+        obstacles.add(Obstacle(RectF(width * 0.25f, top + playH * 0.68f, width * 0.62f, top + playH * 0.74f)))
+        // Obstáculos adicionales adaptados
+        obstacles.add(Obstacle(RectF(width * 0.10f, top + playH * 0.05f, width * 0.40f, top + playH * 0.11f)))
+        obstacles.add(Obstacle(RectF(width * 0.60f, top + playH * 0.82f, width * 0.90f, top + playH * 0.88f)))
     }
 
     private fun updateGame() {
-        ball.update(sensorX, sensorY, width, height)
+        val topBoundary = getTopBoundary()
+        val bottomBoundary = getBottomBoundary()
+        ball.update(sensorX, sensorY, width, height, topBoundary, bottomBoundary)
 
-        // Detectar choque con bordes
+        // Detectar choque con bordes usando las nuevas fronteras de juego
         val isTouchingBorder = ball.position.x <= ball.radius() || 
                              ball.position.x >= width - ball.radius() ||
-                             ball.position.y <= ball.radius() || 
-                             ball.position.y >= height - ball.radius()
+                             ball.position.y <= topBoundary + ball.radius() || 
+                             ball.position.y >= bottomBoundary - ball.radius()
         
         if (isTouchingBorder) {
             if (!wasTouchingBorder) {
@@ -119,14 +197,15 @@ class GameView(context: Context) : View(context) {
                 highScore = score
                 sharedPrefs.edit().putInt("high_score", highScore).apply()
             }
-            target.relocate(width, height)
+            target.relocate(width, height, topBoundary, bottomBoundary)
             vibrate(35)
         }
 
         obstacles.forEach { obstacle ->
             if (Collision.circleWithRect(ball.position, ball.radius(), obstacle.rect)) {
                 lives--
-                ball.position.set(width / 2f, height / 2f)
+                val spawnPos = getSafeSpawnPosition()
+                ball.position.set(spawnPos.x, spawnPos.y)
                 vibrate(120)
                 if (lives <= 0) {
                     gameOver = true
@@ -148,8 +227,8 @@ class GameView(context: Context) : View(context) {
             obstacles.forEach { it.draw(canvas) }
             ball.draw(canvas)
 
-            // Instrucciones de juego en la parte inferior
-            canvas.drawText("Instrucciones: Mueve la bola azul al objetivo verde esquivando los obstáculos rojos.", 24f, height - 40f, smallPaint)
+            // Instrucciones de juego en la parte inferior adaptables
+            drawBottomInstructions(canvas)
 
             if (gameOver) drawGameOver(canvas)
         }
@@ -171,11 +250,61 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun drawHeader(canvas: Canvas) {
-        canvas.drawRoundRect(24f, 24f, width - 24f, 138f, 28f, 28f, panelPaint)
-        canvas.drawText("Gravity Ball Kotlin", 48f, 72f, titlePaint)
-        canvas.drawText("Puntaje: $score   Record: $highScore   Vidas: $lives", 48f, 116f, textPaint)
-        canvas.drawText("Sensor X: ${sensorX.roundToInt()}  Y: ${sensorY.roundToInt()}", width - 320f, 72f, smallPaint)
-        canvas.drawText("Bola X: ${ball.position.x.roundToInt()}  Y: ${ball.position.y.roundToInt()}", width - 320f, 116f, smallPaint)
+        val top = 60f
+        canvas.drawRoundRect(24f, top, width - 24f, top + 120f, 28f, 28f, panelPaint)
+        canvas.drawText("Gravity Ball Kotlin", 48f, top + 48f, titlePaint)
+        canvas.drawText("Puntaje: $score   Record: $highScore   Vidas: $lives", 48f, top + 92f, textPaint)
+        canvas.drawText("Sensor X: ${sensorX.roundToInt()}  Y: ${sensorY.roundToInt()}", width - 320f, top + 48f, smallPaint)
+        canvas.drawText("Bola X: ${ball.position.x.roundToInt()}  Y: ${ball.position.y.roundToInt()}", width - 320f, top + 92f, smallPaint)
+    }
+
+    private fun drawBottomInstructions(canvas: Canvas) {
+        val top = height - 180f
+        canvas.drawRoundRect(24f, top, width - 24f, height - 30f, 28f, 28f, panelPaint)
+        
+        // Alinear al centro para centrar en el panel
+        instructionsPaint.textAlign = Paint.Align.CENTER
+        
+        val centerX = width / 2f
+        val textY = top + 60f
+        
+        drawWrappedText(
+            canvas,
+            "Instrucciones: Mueve la bola azul al objetivo verde esquivando los obstáculos rojos.",
+            centerX,
+            textY,
+            width - 80f,
+            instructionsPaint
+        )
+        
+        instructionsPaint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawWrappedText(canvas: Canvas, text: String, x: Float, y: Float, maxWidth: Float, paint: Paint) {
+        val words = text.split(" ")
+        val lines = mutableListOf<String>()
+        var currentLine = StringBuilder()
+
+        for (word in words) {
+            val testLine = if (currentLine.isEmpty()) word else "${currentLine} ${word}"
+            val testWidth = paint.measureText(testLine)
+            if (testWidth <= maxWidth) {
+                currentLine.append(if (currentLine.isEmpty()) word else " ${word}")
+            } else {
+                lines.add(currentLine.toString())
+                currentLine = StringBuilder(word)
+            }
+        }
+        if (currentLine.isNotEmpty()) {
+            lines.add(currentLine.toString())
+        }
+
+        var currentY = y
+        val spacing = paint.textSize * 1.3f
+        for (line in lines) {
+            canvas.drawText(line, x, currentY, paint)
+            currentY += spacing
+        }
     }
 
     private fun drawStartOverlay(canvas: Canvas) {
