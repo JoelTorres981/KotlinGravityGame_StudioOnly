@@ -35,6 +35,8 @@ credentials.xml
 
 # Output files
 *.apk
+!APK/
+!APK/*.apk
 *.ap_
 *.aab
 *.dex
