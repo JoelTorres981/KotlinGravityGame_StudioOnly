@@ -1,0 +1,46 @@
+# Gradle files & build outputs
+.gradle/
+build/
+app/build/
+**/build/
+
+# Local user/device-specific configurations
+local.properties
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries/
+.idea/libraries/
+.idea/caches/
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# System specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Keystores, signing files, and secrets
+*.jks
+*.keystore
+*.pk8
+*.key
+credentials.xml
+
+# Output files
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Caches and profiling
+.externalNativeBuild/
+.cxx/
+captures/
